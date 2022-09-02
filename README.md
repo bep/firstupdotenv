@@ -1,7 +1,4 @@
-
-
-
-This is a simple Go program that finds the first `firstup.env` file starting from the current directory walking upwareds, excluding the root folder.
+This is a simple Go program that finds the first `firstup.env` file starting from the current directory walking upward, stopping before the root folder (meaning: any `/firstup.env` file will not be read).
 
 It will write the env vars as export statements. It will also store the list of keys set in a separate environment variable and unset those next time `firstupdotenv` is run.
 
