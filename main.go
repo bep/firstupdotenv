@@ -66,8 +66,10 @@ func createEnvSourceFromCurrentDir() (string, error) {
 
 	if envFromFile != "" {
 		envSetScript.WriteString(envFromFile)
+		envSetScript.WriteString(fmt.Sprintf("export FIRSTUPDOTENV_FILE=%s\n", filepath.Join(directory, nameDotEnv)))
 	} else {
 		envSetScript.WriteString(fmt.Sprintf("unset %s\n", currentSetEnvVar))
+		envSetScript.WriteString(fmt.Sprintf("unset FIRSTUPDOTENV_FILE\n"))
 	}
 
 	return envSetScript.String(), nil
