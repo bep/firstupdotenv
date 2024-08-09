@@ -103,7 +103,6 @@ func loadEnvFile(directory string) (string, error) {
 	}
 
 	return envSetScript.String(), nil
-
 }
 
 // parseEnvFile loads environment variables from text file on the form key=value.
