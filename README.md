@@ -8,11 +8,32 @@ The output may then look like this:
 unset FOO
 unset BAR
 export FIRSTUPDOTENV_CURRENT_SET_ENV=FOO,BAR
-export FOO=value1
-export BAR=value2
+export FOO="value1"
+export BAR="value2"
 ```
 
 The `.env` format is a file on the form  `key=value`. It ignores empty lines and lines starting with # and lines without an equals sign. If the same key is defined more than once, the last will win.
+
+## 1Password Integration
+
+You can load environment variables from 1Password by adding a line starting with `op://`:
+
+```bash
+# Regular variables
+FOO=bar
+
+# Load from 1Password
+op://Dev/myproject/env
+```
+
+The referenced 1Password field should contain line-separated `KEY=value` entries:
+
+```
+AWS_ACCESS_KEY=xxx
+AWS_SECRET_KEY=yyy
+```
+
+This executes a single `op read` command, which is useful since `op` can be slow (~1 second per invocation). All keys loaded from 1Password are tracked and will be unset when you navigate away.
 
 To install:
 
