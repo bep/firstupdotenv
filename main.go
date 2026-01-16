@@ -2,13 +2,14 @@ package main
 
 import (
 	"bufio"
-	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/1password/onepassword-sdk-go"
 )
 
 const (
@@ -83,10 +84,24 @@ func loadEnvFile(directory string) (string, error) {
 		return "", nil
 	}
 
-	envm, err := parseEnvFile(filename)
+	envm, opRefs, err := parseEnvFile(filename)
 	if err != nil {
 		return "", err
 	}
+
+	// Resolve 1Password references in bulk if any.
+	if len(opRefs) > 0 {
+		secrets, err := resolveOnePasswordSecrets(opRefs)
+		if err != nil {
+			return "", err
+		}
+		for _, secret := range secrets {
+			for k, v := range parseSecretContent(secret) {
+				envm[k] = v
+			}
+		}
+	}
+
 	if len(envm) == 0 {
 		return "", nil
 	}
@@ -109,20 +124,22 @@ func loadEnvFile(directory string) (string, error) {
 
 // parseEnvFile loads environment variables from text file on the form key=value.
 // It ignores empty lines and lines starting with #.
-// Lines starting with op:// are treated as 1Password references and loaded via `op read`.
-func parseEnvFile(filename string) (map[string]string, error) {
+// Lines starting with op:// are collected as 1Password references.
+func parseEnvFile(filename string) (map[string]string, []string, error) {
 	fi, err := os.Stat(filename)
 	if err != nil || fi.IsDir() {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	f, err := os.Open(filename)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer f.Close()
 
 	env := make(map[string]string)
+	var opRefs []string
+
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -130,13 +147,7 @@ func parseEnvFile(filename string) (map[string]string, error) {
 			continue
 		}
 		if strings.HasPrefix(line, "op://") {
-			opEnv, err := readFromOnePassword(line)
-			if err != nil {
-				return nil, err
-			}
-			for k, v := range opEnv {
-				env[k] = v
-			}
+			opRefs = append(opRefs, line)
 			continue
 		}
 		key, value, found := strings.Cut(line, "=")
@@ -145,23 +156,46 @@ func parseEnvFile(filename string) (map[string]string, error) {
 		}
 		env[strings.TrimSpace(key)] = strings.TrimSpace(value)
 	}
-	return env, scanner.Err()
+	return env, opRefs, scanner.Err()
 }
 
-// readFromOnePassword reads environment variables from a 1Password reference.
-// The reference should be in the form op://vault/item/field.
-// The field should contain line-separated KEY=value entries.
-func readFromOnePassword(reference string) (map[string]string, error) {
-	cmd := exec.Command("op", "read", reference)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("op read %s: %w: %s", reference, err, stderr.String())
+// resolveOnePasswordSecrets resolves multiple 1Password references in bulk using the SDK.
+// It uses desktop app authentication (Touch ID, etc.) via the OP_ACCOUNT environment variable.
+func resolveOnePasswordSecrets(refs []string) ([]string, error) {
+	account := os.Getenv("OP_ACCOUNT")
+	if account == "" {
+		return nil, fmt.Errorf("OP_ACCOUNT environment variable must be set to your 1Password account name")
 	}
 
+	client, err := onepassword.NewClient(
+		context.Background(),
+		onepassword.WithDesktopAppIntegration(account),
+		onepassword.WithIntegrationInfo(name, "v1.0.0"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create 1Password client: %w", err)
+	}
+
+	result, err := client.Secrets().ResolveAll(context.Background(), refs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve 1Password secrets: %w", err)
+	}
+
+	var secrets []string
+	for ref, resp := range result.IndividualResponses {
+		if resp.Error != nil {
+			return nil, fmt.Errorf("failed to resolve secret %q: %v", ref, resp.Error.Type)
+		}
+		secrets = append(secrets, resp.Content.Secret)
+	}
+
+	return secrets, nil
+}
+
+// parseSecretContent parses KEY=value lines from a secret content string.
+func parseSecretContent(content string) map[string]string {
 	env := make(map[string]string)
-	scanner := bufio.NewScanner(&stdout)
+	scanner := bufio.NewScanner(strings.NewReader(content))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -173,5 +207,5 @@ func readFromOnePassword(reference string) (map[string]string, error) {
 		}
 		env[strings.TrimSpace(key)] = strings.TrimSpace(value)
 	}
-	return env, scanner.Err()
+	return env
 }
