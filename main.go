@@ -2,9 +2,11 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -69,7 +71,7 @@ func createEnvSourceFromCurrentDir() (string, error) {
 		envSetScript.WriteString(fmt.Sprintf("export FIRSTUPDOTENV_FILE=%s\n", filepath.Join(directory, nameDotEnv)))
 	} else {
 		envSetScript.WriteString(fmt.Sprintf("unset %s\n", currentSetEnvVar))
-		envSetScript.WriteString(fmt.Sprintf("unset FIRSTUPDOTENV_FILE\n"))
+		envSetScript.WriteString(fmt.Sprintln("unset FIRSTUPDOTENV_FILE"))
 	}
 
 	return envSetScript.String(), nil
@@ -99,14 +101,15 @@ func loadEnvFile(directory string) (string, error) {
 	envSetScript.WriteString(fmt.Sprintf("export %s=%s\n", currentSetEnvVar, strings.Join(keys, ",")))
 
 	for k, v := range envm {
-		envSetScript.WriteString(fmt.Sprintf("export %s=%s\n", k, v))
+		envSetScript.WriteString(fmt.Sprintf("export %s=%q\n", k, v))
 	}
 
 	return envSetScript.String(), nil
 }
 
 // parseEnvFile loads environment variables from text file on the form key=value.
-// It ignores empty lines and lines starting with # and lines without an equals sign.
+// It ignores empty lines and lines starting with #.
+// Lines starting with op:// are treated as 1Password references and loaded via `op read`.
 func parseEnvFile(filename string) (map[string]string, error) {
 	fi, err := os.Stat(filename)
 	if err != nil || fi.IsDir() {
@@ -121,6 +124,44 @@ func parseEnvFile(filename string) (map[string]string, error) {
 
 	env := make(map[string]string)
 	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "op://") {
+			opEnv, err := readFromOnePassword(line)
+			if err != nil {
+				return nil, err
+			}
+			for k, v := range opEnv {
+				env[k] = v
+			}
+			continue
+		}
+		key, value, found := strings.Cut(line, "=")
+		if !found {
+			continue
+		}
+		env[strings.TrimSpace(key)] = strings.TrimSpace(value)
+	}
+	return env, scanner.Err()
+}
+
+// readFromOnePassword reads environment variables from a 1Password reference.
+// The reference should be in the form op://vault/item/field.
+// The field should contain line-separated KEY=value entries.
+func readFromOnePassword(reference string) (map[string]string, error) {
+	cmd := exec.Command("op", "read", reference)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("op read %s: %w: %s", reference, err, stderr.String())
+	}
+
+	env := make(map[string]string)
+	scanner := bufio.NewScanner(&stdout)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") {
