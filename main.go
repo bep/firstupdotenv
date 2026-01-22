@@ -101,7 +101,7 @@ func loadEnvFile(directory string) (string, error) {
 	envSetScript.WriteString(fmt.Sprintf("export %s=%s\n", currentSetEnvVar, strings.Join(keys, ",")))
 
 	for k, v := range envm {
-		envSetScript.WriteString(fmt.Sprintf("export %s=%q\n", k, v))
+		envSetScript.WriteString(fmt.Sprintf("export %s=%s\n", k, v))
 	}
 
 	return envSetScript.String(), nil
