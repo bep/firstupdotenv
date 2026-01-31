@@ -22,6 +22,6 @@ func TestFindEnvInCurrentDir(t *testing.T) {
 	}
 
 	check("export FIRSTUPDOTENV_CURRENT_SET_ENV=FOO,BAR")
-	check(`export FOO="value1"`)
-	check(`export BAR="value2"`)
+	check(`export FOO=value1`)
+	check(`export BAR=value2`)
 }
