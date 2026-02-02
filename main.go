@@ -3,7 +3,9 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -12,9 +14,11 @@ import (
 )
 
 const (
-	name             = "firstupdotenv"
-	nameDotEnv       = "firstup.env"
-	currentSetEnvVar = "FIRSTUPDOTENV_CURRENT_SET_ENV"
+	name                     = "firstupdotenv"
+	nameDotEnv               = "firstup.env"
+	currentSetEnvVar         = "FIRSTUPDOTENV_CURRENT_SET_ENV"
+	firstUpDotEnvFilenameVar = "FIRSTUPDOTENV_FILE"
+	firstUpDotEnvFileHashVar = "FIRSTUPDOTENV_FILE_HASH"
 )
 
 func main() {
@@ -25,13 +29,48 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(env)
+	if env != "" {
+		fmt.Println(env)
+	}
 }
 
 func createEnvSourceFromCurrentDir() (string, error) {
 	directory, err := os.Getwd()
 	if err != nil {
 		return "", err
+	}
+
+	var (
+		envFromFile                   string
+		firsUptDotEnvFilename         string
+		contentHash                   string
+		existingFirstUpDotEnvFileHash = os.Getenv(firstUpDotEnvFileHashVar)
+	)
+
+	for {
+		if strings.Count(directory, string(os.PathSeparator)) < 2 {
+			// Stop before the root directory.
+			break
+		}
+		firsUptDotEnvFilename = filepath.Join(directory, nameDotEnv)
+		contentHash, err = hashEnvFileContent(firsUptDotEnvFilename)
+		if err == nil {
+			if existingFirstUpDotEnvFileHash != "" && existingFirstUpDotEnvFileHash == contentHash {
+				// No changes to the env file, skip reloading.
+				return "", nil
+			}
+			envFromFile, err = loadEnvFile(firsUptDotEnvFilename)
+			if err != nil {
+				return "", err
+			}
+		}
+
+		if envFromFile != "" {
+			break
+		}
+
+		// Walk up one level.
+		directory = filepath.Dir(directory)
 	}
 
 	var envSetScript strings.Builder
@@ -45,44 +84,33 @@ func createEnvSourceFromCurrentDir() (string, error) {
 		}
 	}
 
-	var envFromFile string
-
-	for {
-		if strings.Count(directory, string(os.PathSeparator)) < 2 {
-			// Stop before the root directory.
-			break
-		}
-
-		envFromFile, err = loadEnvFile(directory)
-		if err != nil {
-			return "", err
-		}
-
-		if envFromFile != "" {
-			break
-		}
-
-		// Walk up one directory.
-		directory = filepath.Dir(directory)
-	}
-
 	if envFromFile != "" {
 		envSetScript.WriteString(envFromFile)
-		envSetScript.WriteString(fmt.Sprintf("export FIRSTUPDOTENV_FILE=%s\n", filepath.Join(directory, nameDotEnv)))
+		envSetScript.WriteString(fmt.Sprintf("export %s=%s\n", firstUpDotEnvFilenameVar, firsUptDotEnvFilename))
+		envSetScript.WriteString(fmt.Sprintf("export %s=%s\n", firstUpDotEnvFileHashVar, contentHash))
 	} else {
 		envSetScript.WriteString(fmt.Sprintf("unset %s\n", currentSetEnvVar))
-		envSetScript.WriteString(fmt.Sprintln("unset FIRSTUPDOTENV_FILE"))
+		envSetScript.WriteString(fmt.Sprintf("unset %s\n", firstUpDotEnvFilenameVar))
+		envSetScript.WriteString(fmt.Sprintf("unset %s\n", firstUpDotEnvFileHashVar))
 	}
 
 	return envSetScript.String(), nil
 }
 
-func loadEnvFile(directory string) (string, error) {
-	filename := filepath.Join(directory, nameDotEnv)
-	if _, err := os.Stat(filename); err != nil {
-		return "", nil
+func hashEnvFileContent(filename string) (string, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return "", err
 	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
 
+func loadEnvFile(filename string) (string, error) {
 	envm, err := parseEnvFile(filename)
 	if err != nil {
 		return "", err
