@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -78,8 +79,8 @@ func createEnvSourceFromCurrentDir() (string, error) {
 	// Always remove the old settings, even if we don't find a new one.
 	old := os.Getenv(currentSetEnvVar)
 	if old != "" {
-		oldKeys := strings.Split(old, ",")
-		for _, key := range oldKeys {
+		oldKeys := strings.SplitSeq(old, ",")
+		for key := range oldKeys {
 			envSetScript.WriteString(fmt.Sprintf("unset %s\n", key))
 		}
 	}
@@ -162,9 +163,7 @@ func parseEnvFile(filename string) (map[string]string, error) {
 			if err != nil {
 				return nil, err
 			}
-			for k, v := range opEnv {
-				env[k] = v
-			}
+			maps.Copy(env, opEnv)
 			continue
 		}
 		key, value, found := strings.Cut(line, "=")
