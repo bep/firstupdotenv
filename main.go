@@ -88,8 +88,8 @@ func createEnvSourceFromCurrentDir() (string, error) {
 
 	if envFromFile != "" {
 		envSetScript.WriteString(envFromFile)
-		envSetScript.WriteString(fmt.Sprintf("export %s=%s\n", firstUpDotEnvFilenameVar, firsUptDotEnvFilename))
-		envSetScript.WriteString(fmt.Sprintf("export %s=%s\n", firstUpDotEnvFileHashVar, contentHash))
+		envSetScript.WriteString(fmt.Sprintf("export %s='%s'\n", firstUpDotEnvFilenameVar, firsUptDotEnvFilename))
+		envSetScript.WriteString(fmt.Sprintf("export %s='%s'\n", firstUpDotEnvFileHashVar, contentHash))
 	} else {
 		envSetScript.WriteString(fmt.Sprintf("unset %s\n", currentSetEnvVar))
 		envSetScript.WriteString(fmt.Sprintf("unset %s\n", firstUpDotEnvFilenameVar))
@@ -130,10 +130,10 @@ func loadEnvFile(filename string) (string, error) {
 	}
 	// Sort the keys to ensure consistent output for testing and readability.
 	sort.Strings(keys)
-	envSetScript.WriteString(fmt.Sprintf("export %s=%s\n", currentSetEnvVar, strings.Join(keys, ",")))
+	envSetScript.WriteString(fmt.Sprintf("export %s='%s'\n", currentSetEnvVar, strings.Join(keys, ",")))
 
 	for k, v := range envm {
-		envSetScript.WriteString(fmt.Sprintf("export %s=%s\n", k, v))
+		envSetScript.WriteString(fmt.Sprintf("export %s='%s'\n", k, v))
 	}
 
 	return envSetScript.String(), nil

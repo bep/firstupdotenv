@@ -7,10 +7,12 @@ The output may then look like this:
 ```bash
 unset FOO
 unset BAR
-export FIRSTUPDOTENV_CURRENT_SET_ENV=FOO,BAR
-export FOO="value1"
-export BAR="value2"
+export FIRSTUPDOTENV_CURRENT_SET_ENV='FOO,BAR'
+export FOO='value1'
+export BAR='value2'
 ```
+
+Note the use of single quotes above to prevent any unlikely security issues with command substitution, word splitting and glob expansion. But this means that environment values with single quotes in them will not work correctly.
 
 The `.env` format is a file on the form  `key=value`. It ignores empty lines and lines starting with # and lines without an equals sign. If the same key is defined more than once, the last will win.
 
