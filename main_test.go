@@ -6,7 +6,8 @@ import (
 )
 
 func TestFindEnvInCurrentDir(t *testing.T) {
-	t.Parallel()
+	// Clear any existing env vars that would cause early return.
+	t.Setenv(firstUpDotEnvFileHashVar, "")
 
 	env, err := createEnvSourceFromCurrentDir()
 	if err != nil {
