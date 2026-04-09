@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -127,6 +128,8 @@ func loadEnvFile(filename string) (string, error) {
 		os.Setenv(k, v)
 		keys = append(keys, k)
 	}
+	// Sort the keys to ensure consistent output for testing and readability.
+	sort.Strings(keys)
 	envSetScript.WriteString(fmt.Sprintf("export %s=%s\n", currentSetEnvVar, strings.Join(keys, ",")))
 
 	for k, v := range envm {
