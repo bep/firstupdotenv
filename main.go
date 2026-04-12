@@ -125,7 +125,9 @@ func loadEnvFile(filename string) (string, error) {
 
 	var keys []string
 	for k, v := range envm {
-		os.Setenv(k, v)
+		// Remove quotes from value.
+		v = strings.Trim(v, `"'`)
+		envm[k] = v
 		keys = append(keys, k)
 	}
 	// Sort the keys to ensure consistent output for testing and readability.
